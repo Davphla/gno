@@ -6,7 +6,7 @@ import (
 	"chain/runtime"
 	"strconv"
 
-	"gno.land/p/nt/avl"
+	"gno.land/p/nt/avl/v0"
 )
 
 // This example demonstrates the Gno equivalent of Solidity's

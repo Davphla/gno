@@ -4,7 +4,7 @@ import (
 	"chain/runtime"
 	"strings"
 
-	"gno.land/p/nt/avl"
+	"gno.land/p/nt/avl/v0"
 )
 
 // Service represents a registered service
@@ -162,7 +162,7 @@ package registry
 import (
     "chain/runtime"
     
-    "gno.land/p/nt/avl"
+    "gno.land/p/nt/avl/v0"
 )
 
 type Entry struct {
