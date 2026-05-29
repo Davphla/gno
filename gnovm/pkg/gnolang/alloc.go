@@ -301,7 +301,11 @@ func (alloc *Allocator) Fork() *Allocator {
 }
 
 func (alloc *Allocator) Allocate(size int64) {
-	if overflow.Addp(alloc.bytes, size) > alloc.maxBytes {
+	total, ok := overflow.Add(alloc.bytes, size)
+	if !ok {
+		panic(&Exception{Value: typedString("runtime error: makeslice: len out of range")})
+	}
+	if total > alloc.maxBytes {
 		if alloc.collect == nil {
 			// Forked allocators (e.g. the store's tx-scoped allocator
 			// before NewMachineWithOptions installs a GC callback, and
@@ -334,7 +338,15 @@ func (alloc *Allocator) Allocate(size int64) {
 }
 
 func (alloc *Allocator) AllocateString(size int64) {
-	alloc.Allocate(overflow.Addp(allocString, overflow.Mulp(allocStringByte, size)))
+	bytes, ok := overflow.Mul(allocStringByte, size)
+	if !ok {
+		panic(&Exception{Value: typedString("runtime error: makeslice: len out of range")})
+	}
+	total, ok := overflow.Add(allocString, bytes)
+	if !ok {
+		panic(&Exception{Value: typedString("runtime error: makeslice: len out of range")})
+	}
+	alloc.Allocate(total)
 }
 
 func (alloc *Allocator) AllocatePointer() {
@@ -342,11 +354,23 @@ func (alloc *Allocator) AllocatePointer() {
 }
 
 func (alloc *Allocator) AllocateDataArray(size int64) {
-	alloc.Allocate(overflow.Addp(allocArray, size))
+	total, ok := overflow.Add(allocArray, size)
+	if !ok {
+		panic(&Exception{Value: typedString("runtime error: makeslice: len out of range")})
+	}
+	alloc.Allocate(total)
 }
 
 func (alloc *Allocator) AllocateListArray(items int64) {
-	alloc.Allocate(overflow.Addp(allocArray, overflow.Mulp(allocArrayItem, items)))
+	bytes, ok := overflow.Mul(allocArrayItem, items)
+	if !ok {
+		panic(&Exception{Value: typedString("runtime error: makeslice: len out of range")})
+	}
+	total, ok := overflow.Add(allocArray, bytes)
+	if !ok {
+		panic(&Exception{Value: typedString("runtime error: makeslice: len out of range")})
+	}
+	alloc.Allocate(total)
 }
 
 func (alloc *Allocator) AllocateSlice() {
@@ -359,7 +383,11 @@ func (alloc *Allocator) AllocateStruct() {
 }
 
 func (alloc *Allocator) AllocateStructFields(fields int64) {
-	alloc.Allocate(overflow.Mulp(allocStructField, fields))
+	total, ok := overflow.Mul(allocStructField, fields)
+	if !ok {
+		panic(&Exception{Value: typedString("runtime error: makeslice: len out of range")})
+	}
+	alloc.Allocate(total)
 }
 
 func (alloc *Allocator) AllocateFunc() {
@@ -367,7 +395,15 @@ func (alloc *Allocator) AllocateFunc() {
 }
 
 func (alloc *Allocator) AllocateMap(items int64) {
-	alloc.Allocate(overflow.Addp(allocMap, overflow.Mulp(allocMapItem, items)))
+	bytes, ok := overflow.Mul(allocMapItem, items)
+	if !ok {
+		panic(&Exception{Value: typedString("runtime error: makeslice: len out of range")})
+	}
+	total, ok := overflow.Add(allocMap, bytes)
+	if !ok {
+		panic(&Exception{Value: typedString("runtime error: makeslice: len out of range")})
+	}
+	alloc.Allocate(total)
 }
 
 func (alloc *Allocator) AllocateMapItem() {
@@ -383,11 +419,23 @@ func (alloc *Allocator) AllocatePackageValue() {
 }
 
 func (alloc *Allocator) AllocateBlock(items int64) {
-	alloc.Allocate(overflow.Addp(allocBlock, overflow.Mulp(allocBlockItem, items)))
+	bytes, ok := overflow.Mul(allocBlockItem, items)
+	if !ok {
+		panic(&Exception{Value: typedString("runtime error: makeslice: len out of range")})
+	}
+	total, ok := overflow.Add(allocBlock, bytes)
+	if !ok {
+		panic(&Exception{Value: typedString("runtime error: makeslice: len out of range")})
+	}
+	alloc.Allocate(total)
 }
 
 func (alloc *Allocator) AllocateBlockItems(items int64) {
-	alloc.Allocate(overflow.Mulp(allocBlockItem, items))
+	total, ok := overflow.Mul(allocBlockItem, items)
+	if !ok {
+		panic(&Exception{Value: typedString("runtime error: makeslice: len out of range")})
+	}
+	alloc.Allocate(total)
 }
 
 /* NOTE: Not used, account for with AllocatePointer.
