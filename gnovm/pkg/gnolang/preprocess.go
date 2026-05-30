@@ -1917,6 +1917,115 @@ func preprocess1(store Store, ctx BlockNode, n Node) Node {
 							}
 
 							return n, TRANS_CONTINUE
+						case "min", "max":
+							// Go 1.21 min/max builtins. Self-contained: validate
+							// arg count, resolve common ordered type (including
+							// untyped-const convergence), check ordered-kind,
+							// convert all args to the common type, optionally
+							// fold all-const calls, then skip the general
+							// generic path with TRANS_CONTINUE.
+							//
+							// NOTE: defNative declares min/max as
+							//   func(args ...T) T
+							// so the Go-side typechecker shim doesn't enforce
+							// the "ordered" constraint. We enforce it here.
+							if n.Varg {
+								panic(fmt.Sprintf("%s does not accept variadic spread (...)", fv.Name))
+							}
+							if len(n.Args) == 0 {
+								panic(fmt.Sprintf("missing argument to %s", fv.Name))
+							}
+							n.NumArgs = countNumArgs(store, last, n)
+
+							// Resolve the common type by walking args. Untyped
+							// constants converge to the highest-specificity
+							// untyped default present; typed args dominate
+							// untyped ones (matching Go's `1.5 < 2` rules).
+							var commonT Type
+							argTs := make([]Type, len(n.Args))
+							for i, arg := range n.Args {
+								at := evalStaticTypeOf(store, last, arg)
+								argTs[i] = at
+								switch {
+								case commonT == nil:
+									commonT = at
+								case isUntyped(commonT) && !isUntyped(at):
+									commonT = at
+								case !isUntyped(commonT) && isUntyped(at):
+									// keep commonT (typed dominates)
+								case isUntyped(commonT) && isUntyped(at):
+									// Promote to higher specificity (e.g. untyped
+									// int + untyped float → untyped float).
+									// shouldSwapOnSpecificity(commonT, at) returns
+									// true when commonT is MORE specific, which
+									// means we keep commonT. When it returns false
+									// (and types differ), at is more specific and
+									// wins.
+									if !shouldSwapOnSpecificity(commonT, at) && commonT.TypeID() != at.TypeID() {
+										commonT = at
+									}
+								default:
+									// both typed: must match exactly (same as
+									// Specify's varg consolidation logic).
+									if commonT.TypeID() != at.TypeID() {
+										panic(fmt.Sprintf(
+											"invalid argument: mismatched types %s and %s in call to %s",
+											commonT.String(), at.String(), fv.Name))
+									}
+								}
+							}
+							// Untyped-only call (e.g. min(1, 2)) — promote to default.
+							if isUntyped(commonT) {
+								commonT = defaultTypeOf(commonT)
+							}
+							if !isOrdered(commonT) {
+								panic(fmt.Sprintf(
+									"invalid argument: cannot use %s as ordered type in call to %s",
+									commonT.String(), fv.Name))
+							}
+
+							// Convert each arg to the common type. Constants are
+							// folded into typed *ConstExpr; non-const args are
+							// assignment-checked.
+							for i := range n.Args {
+								checkOrConvertType(store, last, n, &n.Args[i], commonT)
+							}
+
+							// Specify the func type so downstream codegen sees
+							// the resolved T (mirrors what Specify would do).
+							sft := &FuncType{
+								Params:  []FieldType{{Name: "args", Type: &SliceType{Elt: commonT, Vrd: true}}},
+								Results: []FieldType{{Name: "", Type: commonT}},
+							}
+							n.Func.SetAttribute(ATTR_TYPEOF_VALUE, sft)
+							cx := n.Func.(*ConstExpr)
+							fv2 := cx.V.(*FuncValue).Copy(store.GetAllocator())
+							fv2.Type = sft
+							cx.T = sft
+							cx.V = fv2
+							n.SetAttribute(ATTR_TYPEOF_VALUE, &tupleType{Elts: []Type{commonT}})
+
+							// Constant folding: if every arg is a *ConstExpr,
+							// compute the result at preprocess time so that
+							// `const x = min(1, 2)` works.
+							allConst := true
+							for _, arg := range n.Args {
+								if _, ok := arg.(*ConstExpr); !ok {
+									allConst = false
+									break
+								}
+							}
+							if allConst {
+								folded := foldMinMaxConst(n.Args, fv.Name == "min")
+								folded.Source = n
+								// Replace the CallExpr by returning the const.
+								// The caller (transcribe) will splice it in.
+								setPreprocessed(folded)
+								setConstAttrs(folded)
+								return folded, TRANS_CONTINUE
+							}
+
+							return n, TRANS_CONTINUE
 						case "cross":
 							// cross(rlm) — the explicit cross-call form.
 							// Three constraints, all enforced here:

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	bm "github.com/gnolang/gno/gnovm/pkg/benchops"
+	"github.com/gnolang/gno/gnovm/pkg/gnolang/internal/softfloat"
 	"github.com/gnolang/gno/tm2/pkg/crypto"
 	"github.com/gnolang/gno/tm2/pkg/overflow"
 	"github.com/gnolang/gno/tm2/pkg/store/types"
@@ -1187,6 +1188,35 @@ func makeUverseNode() {
 			})
 		},
 	)
+	// min(x, args ...T) T — Go 1.21 builtin.
+	// Preprocessor (see CallExpr "min"/"max" special-case in preprocess.go)
+	// enforces ≥1 arg, ordered T, untyped-const convergence, and constant
+	// folding for all-const calls. Here we just compute the runtime result
+	// by folding left-to-right using isLss.
+	defNative("min",
+		Flds( // params
+			"args", Vrd(GenT("T", nil)),
+		),
+		Flds( // results
+			"", GenT("T", nil),
+		),
+		func(m *Machine) {
+			arg0 := m.LastBlock().GetParams1(m.Store)
+			doUverseMinMax(m, arg0, true)
+		},
+	)
+	defNative("max",
+		Flds( // params
+			"args", Vrd(GenT("T", nil)),
+		),
+		Flds( // results
+			"", GenT("T", nil),
+		),
+		func(m *Machine) {
+			arg0 := m.LastBlock().GetParams1(m.Store)
+			doUverseMinMax(m, arg0, false)
+		},
+	)
 
 	// NOTE: panic is its own statement type, and is not defined as a function.
 	defNative("print",
@@ -1621,3 +1651,144 @@ func formatUverseOutput(m *Machine, xv PointerValue, newline bool) []byte {
 }
 
 var bNewline = []byte("\n")
+
+// doUverseMinMax implements the min and max uverse builtins at runtime.
+// The preprocessor guarantees: at least 1 arg, all args share an ordered
+// primitive base type (numeric or string), and pure-const calls are folded
+// at preprocess time (so the runtime path is only used when at least one
+// arg is non-const).
+//
+// Folds left-to-right via isLss. NaN propagates: if any float arg is NaN
+// the result is NaN, matching Go 1.21 min/max semantics (since NaN < x and
+// x < NaN are both false in softfloat, NaN "wins" once it enters the
+// accumulator, mirroring upstream's runtime.f64min / runtime.f64max).
+//
+// Gas: each comparison is charged OpCPULss to mirror a plain `<` op. The
+// per-byte / per-bit cost of isLss is applied separately inside isLss.
+func doUverseMinMax(m *Machine, args PointerValue, isMin bool) {
+	n := args.TV.GetLength()
+	if n == 0 {
+		// Preprocessor rejects this; defensive only.
+		panic("min/max requires at least one argument")
+	}
+	// Copy the first arg out — we mutate the accumulator below to track NaN
+	// propagation, so we cannot leave it as a pointer into the args slice.
+	acc := args.TV.GetPointerAtIndexInt(m, m.Store, 0).Deref()
+	for i := 1; i < n; i++ {
+		// One comparison per step, charged at the same OpCPULss rate as `<`.
+		// isLss itself adds per-byte/per-bit cost for strings and bigints.
+		m.incrCPU(OpCPULss)
+		next := args.TV.GetPointerAtIndexInt(m, m.Store, i).Deref()
+		// NaN propagation: for floats, once acc is NaN it stays NaN; if next
+		// is NaN, switch acc to NaN. softfloat.Flt32/Flt64 (and therefore
+		// isLss) return false in both directions when either operand is
+		// NaN, so the bare swap-on-less logic would silently drop NaN.
+		// Detect NaN explicitly to match Go's runtime.f64min/runtime.f64max.
+		if isFloatNaN(&acc) {
+			continue
+		}
+		if isFloatNaN(&next) {
+			acc = next
+			continue
+		}
+		if isMin {
+			if isLss(m, &next, &acc) { // next < acc → take next
+				acc = next
+			}
+		} else {
+			if isLss(m, &acc, &next) { // acc < next → take next
+				acc = next
+			}
+		}
+	}
+	m.PushValue(acc)
+}
+
+// isFloatNaN reports whether tv is a float32/float64 NaN, using softfloat to
+// stay deterministic on hosts where hardware floats might disagree.
+func isFloatNaN(tv *TypedValue) bool {
+	if tv == nil || tv.T == nil {
+		return false
+	}
+	switch tv.T.Kind() {
+	case Float32Kind:
+		f := tv.GetFloat32()
+		// NaN is the only IEEE-754 value that is not equal to itself.
+		return !softfloat.Feq32(f, f)
+	case Float64Kind:
+		f := tv.GetFloat64()
+		return !softfloat.Feq64(f, f)
+	}
+	return false
+}
+
+// tvLssNoGas is a machine-free strict-less-than comparator for ordered
+// TypedValues, used by the preprocess-time min/max constant folder. It mirrors
+// isLss but without the gas-charging side effects (the folder runs at
+// preprocess time, where there is no machine and no gas meter).
+func tvLssNoGas(lv, rv *TypedValue) bool {
+	switch lv.T.Kind() {
+	case StringKind:
+		return lv.GetString() < rv.GetString()
+	case IntKind:
+		return lv.GetInt() < rv.GetInt()
+	case Int8Kind:
+		return lv.GetInt8() < rv.GetInt8()
+	case Int16Kind:
+		return lv.GetInt16() < rv.GetInt16()
+	case Int32Kind:
+		return lv.GetInt32() < rv.GetInt32()
+	case Int64Kind:
+		return lv.GetInt64() < rv.GetInt64()
+	case UintKind:
+		return lv.GetUint() < rv.GetUint()
+	case Uint8Kind:
+		return lv.GetUint8() < rv.GetUint8()
+	case Uint16Kind:
+		return lv.GetUint16() < rv.GetUint16()
+	case Uint32Kind:
+		return lv.GetUint32() < rv.GetUint32()
+	case Uint64Kind:
+		return lv.GetUint64() < rv.GetUint64()
+	case Float32Kind:
+		return softfloat.Flt32(lv.GetFloat32(), rv.GetFloat32())
+	case Float64Kind:
+		return softfloat.Flt64(lv.GetFloat64(), rv.GetFloat64())
+	case BigintKind:
+		return lv.V.(BigintValue).V.Cmp(rv.V.(BigintValue).V) < 0
+	case BigdecKind:
+		return lv.V.(BigdecValue).V.Cmp(rv.V.(BigdecValue).V) < 0
+	}
+	panic(fmt.Sprintf("min/max: < not defined for %s", lv.T.Kind()))
+}
+
+// foldMinMaxConst computes the constant result of an all-const min/max call
+// at preprocess time. Called only when every arg is a *ConstExpr already
+// converted to the common type by checkOrConvertType. Returns a *ConstExpr
+// with the same type as its inputs.
+//
+// NaN propagation matches the runtime path (doUverseMinMax): if any float
+// arg is NaN, the result is NaN.
+func foldMinMaxConst(args []Expr, isMin bool) *ConstExpr {
+	acc := args[0].(*ConstExpr).TypedValue
+	for i := 1; i < len(args); i++ {
+		next := args[i].(*ConstExpr).TypedValue
+		if isFloatNaN(&acc) {
+			continue
+		}
+		if isFloatNaN(&next) {
+			acc = next
+			continue
+		}
+		if isMin {
+			if tvLssNoGas(&next, &acc) {
+				acc = next
+			}
+		} else {
+			if tvLssNoGas(&acc, &next) {
+				acc = next
+			}
+		}
+	}
+	return &ConstExpr{TypedValue: acc}
+}
