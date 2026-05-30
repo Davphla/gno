@@ -1,7 +1,7 @@
 package registry
 
 import (
-	"chain/runtime"
+	"chain/runtime/unsafe"
 	"strings"
 
 	"gno.land/p/nt/avl/v0"
@@ -39,7 +39,7 @@ func Register(_ realm, name, description, endpoint string) {
 		panic("endpoint too long")
 	}
 
-	caller := runtime.PreviousRealm().Address()
+	caller := unsafe.PreviousRealm().Address()
 	key := caller.String() + ":" + name
 
 	if services.Has(key) {
@@ -66,7 +66,7 @@ func Update(_ realm, name, description, endpoint string) {
 		panic("endpoint too long")
 	}
 
-	caller := runtime.PreviousRealm().Address()
+	caller := unsafe.PreviousRealm().Address()
 	key := caller.String() + ":" + name
 
 	val, ok := services.Get(key)
@@ -82,7 +82,7 @@ func Update(_ realm, name, description, endpoint string) {
 
 // Deactivate marks a service as inactive (owner only)
 func Deactivate(_ realm, name string) {
-	caller := runtime.PreviousRealm().Address()
+	caller := unsafe.PreviousRealm().Address()
 	key := caller.String() + ":" + name
 
 	val, ok := services.Get(key)
@@ -97,7 +97,7 @@ func Deactivate(_ realm, name string) {
 
 // Delete removes a service permanently (owner only)
 func Delete(_ realm, name string) {
-	caller := runtime.PreviousRealm().Address()
+	caller := unsafe.PreviousRealm().Address()
 	key := caller.String() + ":" + name
 
 	if !services.Has(key) {
@@ -160,7 +160,7 @@ Common use cases include mapping data, token discovery and realm showcasing.
 package registry
 
 import (
-    "chain/runtime"
+    "chain/runtime/unsafe"
     
     "gno.land/p/nt/avl/v0"
 )
@@ -176,7 +176,7 @@ var (
 )
 
 func Register(_ realm, name, data string) {
-    caller := runtime.PreviousRealm().Address()
+    caller := unsafe.PreviousRealm().Address()
     key := caller.String() + ":" + name
     
     if entries.Has(key) {

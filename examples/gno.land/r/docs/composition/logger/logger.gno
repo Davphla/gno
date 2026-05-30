@@ -1,7 +1,7 @@
 package logger
 
 import (
-	"chain/runtime"
+	"chain/runtime/unsafe"
 	"time"
 )
 
@@ -25,7 +25,7 @@ func Clear(_ realm) {
 
 // assertAuthorized ensures only the composition realm can modify state
 func assertAuthorized() {
-	caller := runtime.PreviousRealm()
+	caller := unsafe.PreviousRealm()
 	if caller.PkgPath() != allowedCaller {
 		panic("unauthorized: only " + allowedCaller + " can modify logger")
 	}

@@ -33,7 +33,7 @@ import "gno.land/r/sys/users"
 
 // Resolve a username to user data
 data, _ := users.ResolveName("alice")
-addr := data.Address()
+addr := data.Addr()
 
 // Resolve an address to user data
 data, _ = users.ResolveAddress(someAddress)
@@ -77,7 +77,7 @@ func RenderUser(nameOrAddr string) string {
         return "User not found"
     }
     
-    addr := userData.Address()
+    addr := userData.Addr()
     name := userData.Name()
     
     // Then, get their profile

@@ -1,7 +1,7 @@
 package factory
 
 import (
-	"chain/runtime"
+	"chain/runtime/unsafe"
 	"strconv"
 )
 
@@ -29,7 +29,7 @@ type FungibleToken struct {
 }
 
 func (f *FungibleToken) GetInfo() string {
-	return f.name + ": " + strconv.Itoa(int(f.amount)) + " units"
+	return f.name + ": " + strconv.FormatUint(f.amount, 10) + " units"
 }
 
 func (f *FungibleToken) GetType() string {
@@ -41,7 +41,7 @@ func (f *FungibleToken) Transfer(to address, amount uint64) string {
 		return "Insufficient balance"
 	}
 	f.amount -= amount
-	return "Transferred " + strconv.Itoa(int(amount)) + " " + f.name + " to " + to.String()
+	return "Transferred " + strconv.FormatUint(amount, 10) + " " + f.name + " to " + to.String()
 }
 
 // NonFungibleToken implements unique tokens (like NFTs)
@@ -105,7 +105,7 @@ var (
 
 // CreateFungibleToken creates a fungible token
 func CreateFungibleToken(_ realm, name string) string {
-	caller := runtime.PreviousRealm().Address()
+	caller := unsafe.PreviousRealm().Address()
 	token := CreateToken(Fungible, name, caller)
 	lastToken = token
 	return "Created: " + token.GetInfo()
@@ -113,7 +113,7 @@ func CreateFungibleToken(_ realm, name string) string {
 
 // CreateNFT creates a non-fungible token
 func CreateNFT(_ realm, name string) string {
-	caller := runtime.PreviousRealm().Address()
+	caller := unsafe.PreviousRealm().Address()
 	token := CreateToken(NonFungible, name, caller)
 	lastToken = token
 	return "Created: " + token.GetInfo()
@@ -121,7 +121,7 @@ func CreateNFT(_ realm, name string) string {
 
 // CreateSoulBound creates a soul-bound token
 func CreateSoulBound(_ realm, name string) string {
-	caller := runtime.PreviousRealm().Address()
+	caller := unsafe.PreviousRealm().Address()
 	token := CreateToken(SoulBound, name, caller)
 	lastToken = token
 	return "Created: " + token.GetInfo()

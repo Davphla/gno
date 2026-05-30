@@ -1,7 +1,7 @@
 package crossing
 
 import (
-	"chain/runtime"
+	"chain/runtime/unsafe"
 )
 
 // This realm demonstrates the crossing mechanism in Gno
@@ -9,12 +9,12 @@ import (
 var owner address
 
 func init() {
-	owner = runtime.CurrentRealm().Address()
+	owner = unsafe.CurrentRealm().Address()
 }
 
 // PublicFunction can be called by anyone
 func PublicFunction(_ realm) string {
-	caller := runtime.PreviousRealm().Address()
+	caller := unsafe.PreviousRealm().Address()
 	return "Called by: " + caller.String()
 }
 
@@ -41,9 +41,9 @@ Every realm in Gno has its own isolated state. When Realm A wants to execute
 a function in Realm B's scope, execution "crosses" into Realm B. The Gno
 runtime tracks this call chain so each realm knows:
 
-- **Who started the transaction?** → ` + "`runtime.OriginCaller()`" + `
-- **Who called me?** → ` + "`runtime.PreviousRealm()`" + `
-- **Where am I?** → ` + "`runtime.CurrentRealm()`" + `
+- **Who started the transaction?** → ` + "`unsafe.OriginCaller()`" + `
+- **Who called me?** → ` + "`unsafe.PreviousRealm()`" + `
+- **Where am I?** → ` + "`unsafe.CurrentRealm()`" + `
 - **Whose state is being modified?** → Always the current realm's state
 
 To define a function as crossing, you must include a ` + "`_ realm`" + ` parameter:

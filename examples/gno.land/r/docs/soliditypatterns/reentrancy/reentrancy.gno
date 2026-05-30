@@ -38,11 +38,11 @@ Coin transfers in Gno do **not** execute code on the recipient. Unlike Solidity'
 ` + "`cross`" + ` function calls—eliminating the reentrancy attack vector entirely.
 
 ` + "```go" + `
-func Withdraw(_ realm, amount int64) {
-    caller := runtime.PreviousRealm().Address()
-    
-    bnk := banker.NewBanker(banker.BankerTypeRealmSend)
-    bnk.SendCoins(runtime.CurrentRealm().Address(), caller, chain.Coins{chain.NewCoin("ugnot", amount)})  // No code executes on recipient
+func Withdraw(cur realm, amount int64) {
+    caller := unsafe.PreviousRealm().Address()
+
+    bnk := banker.NewBanker(banker.BankerTypeRealmSend, cur)
+    bnk.SendCoins(unsafe.CurrentRealm().Address(), caller, chain.Coins{chain.NewCoin("ugnot", amount)})  // No code executes on recipient
     deposits[caller] = 0  // Safe - no reentrancy possible
 }
 ` + "```" + `
@@ -53,21 +53,21 @@ Even though Gno prevents reentrancy attacks, following the **Checks-Effects-Inte
 pattern keeps your code clear and maintainable:
 
 ` + "```go" + `
-func Withdraw(_ realm, amount int64) {
-    caller := runtime.PreviousRealm().Address()
-    
+func Withdraw(cur realm, amount int64) {
+    caller := unsafe.PreviousRealm().Address()
+
     // 1. Checks - validate all preconditions
     balance := deposits[caller]
     if balance < amount {
         panic("insufficient balance")
     }
-    
+
     // 2. Effects - update state before external calls
     deposits[caller] -= amount
-    
+
     // 3. Interactions - perform external operations last
-    bnk := banker.NewBanker(banker.BankerTypeRealmSend)
-    bnk.SendCoins(runtime.CurrentRealm().Address(), caller, chain.Coins{chain.NewCoin("ugnot", amount)})
+    bnk := banker.NewBanker(banker.BankerTypeRealmSend, cur)
+    bnk.SendCoins(unsafe.CurrentRealm().Address(), caller, chain.Coins{chain.NewCoin("ugnot", amount)})
 }
 ` + "```" + `
 
@@ -79,6 +79,6 @@ reentrancy isn't a concern.
 
 ## See Also
 
-- [Banker](/r/docs/banker) - Coin transfer patterns
+- [Banker](/r/docs/soliditypatterns/banker) - Coin transfer patterns
 `
 }

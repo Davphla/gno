@@ -9,22 +9,22 @@ import (
 // from two sub-realms: a counter and a logger.
 
 // IncrementAndLog increments the counter and logs the action
-func IncrementAndLog(_ realm) {
-	counter.Increment(cross)
-	logger.Log(cross, "Counter incremented to "+counter.GetCountStr())
+func IncrementAndLog(cur realm) {
+	counter.Increment(cross(cur))
+	logger.Log(cross(cur), "Counter incremented to "+counter.GetCountStr())
 }
 
 // DecrementAndLog decrements the counter and logs the action
-func DecrementAndLog(_ realm) {
-	counter.Decrement(cross)
-	logger.Log(cross, "Counter decremented to "+counter.GetCountStr())
+func DecrementAndLog(cur realm) {
+	counter.Decrement(cross(cur))
+	logger.Log(cross(cur), "Counter decremented to "+counter.GetCountStr())
 }
 
 // Reset resets the counter and clears logs
-func Reset(_ realm) {
-	counter.Reset(cross)
-	logger.Clear(cross)
-	logger.Log(cross, "System reset")
+func Reset(cur realm) {
+	counter.Reset(cross(cur))
+	logger.Clear(cross(cur))
+	logger.Log(cross(cur), "System reset")
 }
 
 func Render(_ string) string {
@@ -43,10 +43,10 @@ import (
     "gno.land/r/component/b"
 )
 
-func ComposedAction(_ realm) {
-    // Pass cross as the realm parameter when calling external realms
-    a.DoSomething(cross)
-    b.DoSomethingElse(cross)
+func ComposedAction(cur realm) {
+    // Pass cross(cur) when calling external realms
+    a.DoSomething(cross(cur))
+    b.DoSomethingElse(cross(cur))
 }
 ` + "```" + `
 
@@ -60,7 +60,7 @@ each component checks that the caller is the authorized composition realm:
 const allowedCaller = "gno.land/r/my/composite"
 
 func ModifyState(_ realm) {
-    caller := runtime.PreviousRealm()
+    caller := unsafe.PreviousRealm()
     if caller.PkgPath() != allowedCaller {
         panic("unauthorized")
     }

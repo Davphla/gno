@@ -16,11 +16,13 @@ var lastCreatedJSON string
 
 // CreateUserJSON creates a JSON object from user data
 func CreateUserJSON(_ realm, name, email string, age int) string {
-	// Build JSON using the node builder pattern
+	user := User{Name: name, Email: email, Age: age}
+
+	// Build JSON from the struct fields using the node builder pattern
 	node := json.ObjectNode("", map[string]*json.Node{
-		"name":  json.StringNode("name", name),
-		"email": json.StringNode("email", email),
-		"age":   json.NumberNode("age", float64(age)),
+		"name":  json.StringNode("name", user.Name),
+		"email": json.StringNode("email", user.Email),
+		"age":   json.NumberNode("age", float64(user.Age)),
 	})
 
 	encoded, err := json.Marshal(node)

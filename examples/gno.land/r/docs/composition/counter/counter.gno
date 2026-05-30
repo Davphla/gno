@@ -1,11 +1,11 @@
 package counter
 
 import (
-	"chain/runtime"
+	"chain/runtime/unsafe"
 	"strconv"
 )
 
-var count int64 = 0
+var count int64
 
 // allowedCaller is the only realm allowed to modify the counter
 const allowedCaller = "gno.land/r/docs/composition"
@@ -30,7 +30,7 @@ func Reset(_ realm) {
 
 // assertAuthorized ensures only the composition realm can modify state
 func assertAuthorized() {
-	caller := runtime.PreviousRealm()
+	caller := unsafe.PreviousRealm()
 	if caller.PkgPath() != allowedCaller {
 		panic("unauthorized: only " + allowedCaller + " can modify counter")
 	}

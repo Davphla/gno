@@ -39,7 +39,7 @@ Returning an error doesn't revert state changes:
 var balances map[address]int64
 
 func Transfer(_ realm, to address, amount int64) error {
-    from := runtime.PreviousRealm().Address()
+    from := unsafe.PreviousRealm().Address()
     balances[from] -= amount
     if balances[from] < 0 {
         return errors.New("insufficient balance")  // State NOT reverted!
@@ -56,7 +56,7 @@ Check conditions first, or use panic to revert:
 var balances map[address]int64
 
 func Transfer(_ realm, to address, amount int64) {
-    from := runtime.PreviousRealm().Address()
+    from := unsafe.PreviousRealm().Address()
     if balances[from] < amount {
         panic("insufficient balance")  // Reverts all changes
     }
@@ -76,7 +76,7 @@ Using [` + "`OriginCaller`" + `](/r/docs/crossing) for authorization enables mid
 var balances map[address]int64
 
 func Withdraw(_ realm, amount int64) {
-    caller := runtime.OriginCaller()  // Always returns the EOA who signed tx
+    caller := unsafe.OriginCaller()  // Always returns the EOA who signed tx
     balances[caller] -= amount
 }
 ` + "```" + `
@@ -88,7 +88,7 @@ Use [` + "`PreviousRealm().Address()`" + `](/r/docs/crossing) for permission che
 var balances map[address]int64
 
 func Withdraw(_ realm, amount int64) {
-    caller := runtime.PreviousRealm().Address()  // Returns immediate caller
+    caller := unsafe.PreviousRealm().Address()  // Returns immediate caller
     balances[caller] -= amount
 }
 ` + "```" + `
@@ -102,7 +102,7 @@ func Withdraw(_ realm, amount int64) {
 var admin address
 
 func SetAdmin(newAdmin address) {
-    admin = newAdmin  // Could be zero address!
+    admin = newAdmin  // Could be an empty or malformed address!
 }
 
 // CORRECT
