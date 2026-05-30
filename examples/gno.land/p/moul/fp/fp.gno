@@ -261,10 +261,3 @@ func Flatten(values [][]any) []any {
 	return result
 }
 
-// Helper functions
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}

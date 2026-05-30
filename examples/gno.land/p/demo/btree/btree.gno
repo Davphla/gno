@@ -503,8 +503,9 @@ func (n *node) get(key Record) Record {
 	return nil
 }
 
-// min returns the first record in the subtree.
-func min(n *node) Record {
+// firstRecord returns the first record in the subtree.
+// Renamed from `min` because min is a Go 1.21 uverse builtin.
+func firstRecord(n *node) Record {
 	if n == nil {
 		return nil
 	}
@@ -517,8 +518,9 @@ func min(n *node) Record {
 	return n.records[0]
 }
 
-// max returns the last record in the subtree.
-func max(n *node) Record {
+// lastRecord returns the last record in the subtree.
+// Renamed from `max` because max is a Go 1.21 uverse builtin.
+func lastRecord(n *node) Record {
 	if n == nil {
 		return nil
 	}
@@ -1029,12 +1031,12 @@ func (t *BTree) Get(key Record) Record {
 
 // Min returns the smallest record in the tree, or nil if the tree is empty.
 func (t *BTree) Min() Record {
-	return min(t.root)
+	return firstRecord(t.root)
 }
 
 // Max returns the largest record in the tree, or nil if the tree is empty.
 func (t *BTree) Max() Record {
-	return max(t.root)
+	return lastRecord(t.root)
 }
 
 // Has returns true if the given key is in the tree.

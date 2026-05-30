@@ -165,9 +165,9 @@ var uint64pow10 = [...]uint64{
 // of mantissa m. The boolean trunc indicates whether m
 // is truncated compared to the original number being formatted.
 func formatDecimal(d *decimalSlice, m uint64, trunc bool, roundUp bool, prec int) {
-	max := uint64pow10[prec]
+	maxv := uint64pow10[prec]
 	trimmed := 0
-	for m >= max {
+	for m >= maxv {
 		a, b := m/10, m%10
 		m = a
 		trimmed++
@@ -187,7 +187,7 @@ func formatDecimal(d *decimalSlice, m uint64, trunc bool, roundUp bool, prec int
 	if roundUp {
 		m++
 	}
-	if m >= max {
+	if m >= maxv {
 		// Happens if di was originally 99999....xx
 		m /= 10
 		trimmed++

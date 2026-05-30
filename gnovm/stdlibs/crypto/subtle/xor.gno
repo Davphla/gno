@@ -42,10 +42,3 @@ func xorBytes(dst, x, y []byte, n int) {
 		dst[i] = x[i] ^ y[i]
 	}
 }
-
-func min(a, b int) int {
-	if a <= b {
-		return a
-	}
-	return b
-}

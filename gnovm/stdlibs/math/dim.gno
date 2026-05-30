@@ -35,10 +35,13 @@ func Dim(x, y float64) float64 {
 //	Max(+0, ±0) = Max(±0, +0) = +0
 //	Max(-0, -0) = -0
 func Max(x, y float64) float64 {
-	return max(x, y)
+	return mathMax(x, y)
 }
 
-func max(x, y float64) float64 {
+// NOTE: not the builtin max. math.Max has IEEE-754 signed-zero and ±Inf
+// special-casing that the Go 1.21 builtin max does not. Renamed from `max`
+// (which used to shadow before min/max became uverse builtins).
+func mathMax(x, y float64) float64 {
 	// special cases
 	switch {
 	case IsInf(x, 1) || IsInf(y, 1):
@@ -65,10 +68,11 @@ func max(x, y float64) float64 {
 //	Min(x, NaN) = Min(NaN, x) = NaN
 //	Min(-0, ±0) = Min(±0, -0) = -0
 func Min(x, y float64) float64 {
-	return min(x, y)
+	return mathMin(x, y)
 }
 
-func min(x, y float64) float64 {
+// NOTE: not the builtin min. See mathMax comment above.
+func mathMin(x, y float64) float64 {
 	// special cases
 	switch {
 	case IsInf(x, -1) || IsInf(y, -1):

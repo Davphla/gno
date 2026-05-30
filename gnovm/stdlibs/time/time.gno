@@ -373,12 +373,13 @@ func (t Time) Clock() (hour, min, sec int) {
 }
 
 // absClock is like clock but operates on an absolute time.
-func absClock(abs uint64) (hour, min, sec int) {
+// NOTE: result name is `mins` (not `min`) because min became a uverse builtin.
+func absClock(abs uint64) (hour, mins, sec int) {
 	sec = int(abs % secondsPerDay)
 	hour = sec / secondsPerHour
 	sec -= hour * secondsPerHour
-	min = sec / secondsPerMinute
-	sec -= min * secondsPerMinute
+	mins = sec / secondsPerMinute
+	sec -= mins * secondsPerMinute
 	return
 }
 
@@ -586,9 +587,9 @@ func (d Duration) Seconds() float64 {
 
 // Minutes returns the duration as a floating point number of minutes.
 func (d Duration) Minutes() float64 {
-	min := d / Minute
+	mins := d / Minute
 	nsec := d % Minute
-	return float64(min) + float64(nsec)/(60*1e9)
+	return float64(mins) + float64(nsec)/(60*1e9)
 }
 
 // Hours returns the duration as a floating point number of hours.
