@@ -17,6 +17,7 @@ import (
 type cfg struct {
 	docsPath       string
 	treatUrlsAsErr bool
+	fix            bool
 }
 
 func main() {
@@ -27,7 +28,9 @@ func main() {
 			Name:       "docs-linter",
 			ShortUsage: "docs-linter [flags]",
 			ShortHelp: `Lints the .md files in the given folder & subfolders.
-Checks for 404 links (local and remote), as well as improperly escaped JSX tags.`,
+Checks for 404 links (local and remote), local links that leave the docs folder,
+as well as improperly escaped JSX tags. Run with -fix to rewrite the links that
+leave the docs folder into GitHub URLs.`,
 		},
 		cfg,
 		func(ctx context.Context, args []string) error {
@@ -56,6 +59,13 @@ func (c *cfg) RegisterFlags(fs *flag.FlagSet) {
 		true,
 		"treat URL 404s as errors instead of warnings",
 	)
+
+	fs.BoolVar(
+		&c.fix,
+		"fix",
+		false,
+		"rewrite the local links that leave the docs folder into GitHub URLs, instead of linting",
+	)
 }
 
 func execLint(cfg *cfg, ctx context.Context) (string, error) {
@@ -68,6 +78,10 @@ func execLint(cfg *cfg, ctx context.Context) (string, error) {
 		return "", fmt.Errorf("error getting absolute path for docs folder: %w", err)
 	}
 
+	// The generated GitHub URLs are relative to the repository root, which is
+	// the nearest ancestor of the docs folder holding a go.mod
+	repoRoot := findRepoRoot(absPath)
+
 	// Main buffer to write to the end user after linting
 	var output bytes.Buffer
 	output.WriteString(fmt.Sprintf("Linting %s...\n", absPath))
@@ -78,10 +92,16 @@ func execLint(cfg *cfg, ctx context.Context) (string, error) {
 		return "", fmt.Errorf("error finding .md files: %w", err)
 	}
 
+	// Rewriting is a generate step, not a lint one: it touches local links only
+	// and never reaches the network
+	if cfg.fix {
+		return fixLocalLinks(mdFiles, absPath, repoRoot)
+	}
+
 	// Make storage maps for tokens to analyze
-	filepathToURLs := make(map[string][]string)      // file path > [urls]
-	filepathToJSX := make(map[string][]string)       // file path > [JSX items]
-	filepathToLocalLink := make(map[string][]string) // file path > [local links]
+	filepathToURLs := make(map[string][]string)         // file path > [urls]
+	filepathToJSX := make(map[string][]string)          // file path > [JSX items]
+	filepathToLocalLink := make(map[string][]localLink) // file path > [local links]
 
 	// Extract tokens from files
 	for _, filePath := range mdFiles {
@@ -98,7 +118,7 @@ func execLint(cfg *cfg, ctx context.Context) (string, error) {
 		filepathToURLs[filePath] = extractUrls(fileContents)
 
 		// Execute local link extractor
-		filepathToLocalLink[filePath] = extractLocalLinks(fileContents)
+		filepathToLocalLink[filePath] = extractLocalLinkRefs(fileContents)
 	}
 
 	// Run linters in parallel
@@ -127,7 +147,7 @@ func execLint(cfg *cfg, ctx context.Context) (string, error) {
 	})
 
 	g.Go(func() error {
-		res, err := lintLocalLinks(filepathToLocalLink)
+		res, err := lintLocalLinks(filepathToLocalLink, absPath, repoRoot)
 		if err != nil {
 			writeLock.Lock()
 			output.WriteString(res)

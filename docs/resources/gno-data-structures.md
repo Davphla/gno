@@ -31,7 +31,7 @@ Arrays are copied when passed to functions. Use pointers to modify them: `func u
 
 ## AVL Trees
 
-For large or growing datasets, prefer [`avl.Tree`](../../examples/gno.land/p/nt/avl/v0/README.md)
+For large or growing datasets, prefer [`avl.Tree`](https://github.com/gnolang/gno/blob/master/examples/gno.land/p/nt/avl/v0/README.md)
 over maps as it is significantly more efficient in both [gas](./gas-fees.md)
 cost and runtime performance.
 

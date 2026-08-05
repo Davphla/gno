@@ -284,6 +284,122 @@ and [this is a link to a non-existent](../myfolder/myfile.md) file.`
 	}
 }
 
+// mockRepo writes a docs folder holding a page, a go.mod marking the repository
+// root above it, and an examples folder sitting outside the docs root
+func mockRepo(t *testing.T, page string) (repoRoot, docsRoot string) {
+	t.Helper()
+
+	repoRoot, err := os.MkdirTemp(".", "repo")
+	require.NoError(t, err)
+	t.Cleanup(removeDir(t, repoRoot))
+
+	repoRoot, err = filepath.Abs(repoRoot)
+	require.NoError(t, err)
+
+	docsRoot = filepath.Join(repoRoot, "docs")
+
+	require.NoError(t, os.WriteFile(filepath.Join(repoRoot, "go.mod"), []byte("module mock\n"), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(repoRoot, "examples", "pkg"), os.ModePerm))
+	require.NoError(t, os.WriteFile(filepath.Join(repoRoot, "examples", "pkg", "README.md"), []byte("# pkg\n"), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(docsRoot, "resources"), os.ModePerm))
+	require.NoError(t, os.WriteFile(filepath.Join(docsRoot, "resources", "inside.md"), []byte("# inside\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(docsRoot, "resources", "page.md"), []byte(page), 0o644))
+
+	return repoRoot, docsRoot
+}
+
+// mockPage carries one link of every kind the outside-the-docs rules recognise
+const mockPage = "A link that stays inside: [inside](./inside.md)\n" +
+	"A link that leaves: [pkg](../../examples/pkg/README.md#usage)\n" +
+	"A folder that leaves: [examples](../../examples/pkg)\n" +
+	"An embedmd directive: [embedmd]:# (../../examples/pkg/README.md md)\n" +
+	"```\n" +
+	"A fenced sample: [pkg](../../examples/pkg/README.md)\n" +
+	"```\n"
+
+func TestFindRepoRoot(t *testing.T) {
+	t.Parallel()
+
+	repoRoot, docsRoot := mockRepo(t, "# page\n")
+
+	assert.Equal(t, repoRoot, findRepoRoot(docsRoot))
+	assert.Equal(t, "", findRepoRoot(string(filepath.Separator)))
+}
+
+func TestLintLinksOutsideDocs(t *testing.T) {
+	t.Parallel()
+
+	_, docsRoot := mockRepo(t, mockPage)
+
+	res, err := execLint(&cfg{docsPath: docsRoot, treatUrlsAsErr: false}, context.Background())
+	assert.ErrorIs(t, err, errFoundLintItems)
+
+	// Both links that leave the docs root are reported with the URL to use
+	assert.Contains(t, res, "../../examples/pkg/README.md#usage -> "+
+		repoURL+"/blob/"+repoRef+"/examples/pkg/README.md#usage")
+	assert.Contains(t, res, "../../examples/pkg -> "+repoURL+"/tree/"+repoRef+"/examples/pkg")
+
+	// The link that stays inside the docs root is not reported, and neither the
+	// embedmd directive nor the fenced sample is
+	assert.NotContains(t, res, "./inside.md")
+	assert.Equal(t, 2, strings.Count(res, " -> "))
+}
+
+func TestFixLinksOutsideDocs(t *testing.T) {
+	t.Parallel()
+
+	_, docsRoot := mockRepo(t, mockPage)
+	pagePath := filepath.Join(docsRoot, "resources", "page.md")
+
+	res, err := execLint(&cfg{docsPath: docsRoot, fix: true}, context.Background())
+	require.NoError(t, err)
+	assert.Contains(t, res, "Rewrote 2 link(s)")
+
+	expected := "A link that stays inside: [inside](./inside.md)\n" +
+		"A link that leaves: [pkg](" + repoURL + "/blob/" + repoRef + "/examples/pkg/README.md#usage)\n" +
+		"A folder that leaves: [examples](" + repoURL + "/tree/" + repoRef + "/examples/pkg)\n" +
+		"An embedmd directive: [embedmd]:# (../../examples/pkg/README.md md)\n" +
+		"```\n" +
+		"A fenced sample: [pkg](../../examples/pkg/README.md)\n" +
+		"```\n"
+
+	fixed, err := os.ReadFile(pagePath)
+	require.NoError(t, err)
+	assert.Equal(t, expected, string(fixed))
+
+	// Fixing is idempotent: a second run rewrites nothing
+	res, err = execLint(&cfg{docsPath: docsRoot, fix: true}, context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "", res)
+
+	refixed, err := os.ReadFile(pagePath)
+	require.NoError(t, err)
+	assert.Equal(t, expected, string(refixed))
+}
+
+func TestFixLeavesMissingTargetsAlone(t *testing.T) {
+	t.Parallel()
+
+	const page = "A link to nothing: [gone](../../examples/gone/README.md)\n"
+
+	_, docsRoot := mockRepo(t, page)
+	pagePath := filepath.Join(docsRoot, "resources", "page.md")
+
+	res, err := execLint(&cfg{docsPath: docsRoot, fix: true}, context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "", res)
+
+	unchanged, err := os.ReadFile(pagePath)
+	require.NoError(t, err)
+	assert.Equal(t, page, string(unchanged))
+
+	// A target that is not in the tree is a missing file, not a link to rewrite
+	res, err = execLint(&cfg{docsPath: docsRoot, treatUrlsAsErr: false}, context.Background())
+	assert.ErrorIs(t, err, errFoundLintItems)
+	assert.Contains(t, res, "Could not find files with the following paths:")
+	assert.NotContains(t, res, " -> ")
+}
+
 func removeDir(t *testing.T, dirPath string) func() {
 	return func() {
 		require.NoError(t, os.RemoveAll(dirPath))

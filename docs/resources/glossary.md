@@ -35,7 +35,7 @@ particularly suited for large or growing datasets. Deployed under
 `gno.land/p/nt/avl/v0`.
 
 See [Effective Gno](./effective-gno.md#prefer-avltree-over-map-for-scalable-storage) for usage guidance 
-and the [package README](../../examples/gno.land/p/nt/avl/v0/README.md) for technical details.
+and the [package README](https://github.com/gnolang/gno/blob/master/examples/gno.land/p/nt/avl/v0/README.md) for technical details.
 
 ## B
 
