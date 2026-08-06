@@ -224,17 +224,12 @@ func TypeCheckMemPackage(mpkg *std.MemPackage, opts TypeCheckOptions) (
 	}
 	gimp.cfg.Importer = gimp
 
-	// wtests is three-state and must NOT be collapsed to !opts.ProdOnly:
-	// nil stops nowhere (prod, w/ tests, xxx_test and _filetest all run),
-	// a pointer to false stops after the production pass (see ProdOnly),
-	// and a pointer to TRUE stops after the with-tests pass — which would
-	// silently drop the xxx_test and _filetest passes for `gno test`,
-	// `gno lint` and the gnovm test harness.
-	var wtests *bool
+	// tcWithTests is not a caller choice; only ImportFrom selects it.
+	scope := tcAll
 	if opts.ProdOnly {
-		wtests = new(bool)
+		scope = tcProdOnly
 	}
-	pkg, errs = gimp.typeCheckMemPackage(mpkg, wtests)
+	pkg, errs = gimp.typeCheckMemPackage(mpkg, scope)
 	return
 }
 
@@ -383,8 +378,13 @@ func (gimp *gnoImporter) ImportFrom(pkgPath, _ string, _ types.ImportMode) (gopk
 		result.pending = false
 		return nil, err
 	}
-	wtests := gimp.testing && gimp.pkgPath == pkgPath
-	pkg, errs := gimp.typeCheckMemPackage(mpkg, &wtests)
+	// Mirrors the MPF* filter applied to mpkg above: xxx_test and _filetest
+	// are separate packages, but xxx's own _test.gno files extend it.
+	scope := tcProdOnly
+	if gimp.testing && gimp.pkgPath == pkgPath {
+		scope = tcWithTests
+	}
+	pkg, errs := gimp.typeCheckMemPackage(mpkg, scope)
 	if errs != nil {
 		result.err = errs
 		result.pending = false
@@ -438,11 +438,21 @@ func prepareGoGno0p9(f *ast.File) (err error) {
 	return err
 }
 
+// tcScope is how much typeCheckMemPackage checks: the passes run in the order
+// below and it returns after the one named. The zero value runs them all.
+type tcScope int
+
+const (
+	tcAll       tcScope = iota // as MPFNone: prod, w/ tests, xxx_test, _filetest
+	tcProdOnly                 // as MPFProd: prod only (see TypeCheckOptions.ProdOnly)
+	tcWithTests                // as MPFTest: prod and w/ tests, no xxx_test or _filetest
+)
+
 // Assumes that the code is Gno 0.9.
 // If not, first use `gno lint` to transpile the code.
 // Returns parsed *types.Package, *token.FileSet, []*ast.File.
-//   - wtests: if nil, type check all, including filetests; otherwise returns early.
-func (gimp *gnoImporter) typeCheckMemPackage(mpkg *std.MemPackage, wtests *bool) (
+//   - scope: how much to check; see [tcScope].
+func (gimp *gnoImporter) typeCheckMemPackage(mpkg *std.MemPackage, scope tcScope) (
 	pkg *types.Package, errs error,
 ) {
 	// See adr/pr4264_lint_transpile.md
@@ -522,7 +532,7 @@ func (gimp *gnoImporter) typeCheckMemPackage(mpkg *std.MemPackage, wtests *bool)
 		errs = multierr.Combine(gimp.errors[numErrs:]...)
 		return
 	}
-	if wtests != nil && !*wtests {
+	if scope == tcProdOnly {
 		errs = multierr.Combine(gimp.errors[numErrs:]...)
 		if errs != nil {
 			pkg = nil
@@ -540,7 +550,7 @@ func (gimp *gnoImporter) typeCheckMemPackage(mpkg *std.MemPackage, wtests *bool)
 			return
 		}
 	}
-	if wtests != nil { // *wtests is true.
+	if scope == tcWithTests {
 		errs = multierr.Combine(gimp.errors[numErrs:]...)
 		if errs != nil {
 			pkg = nil
@@ -619,8 +629,9 @@ func uniqueDecls(decls map[string]struct{}, gof *ast.File) {
 // []ast.File with `go/parser`.
 //
 // Results:
-//   - gofs: all normal .gno files (and _test.gno files if wtests).
-//   - _gofs: all xxx_test package _test.gno files if wtests.
+//   - gofs: all normal .gno files, plus same-package _test.gno unless
+//     mpkg.Type is MP*Prod.
+//   - _gofs: all xxx_test package _test.gno files, same condition.
 //   - tgofs: all _testfile.gno test files.
 func GoParseMemPackage(mpkg *std.MemPackage, fset *token.FileSet) (
 	gofset *token.FileSet, allgofs, gofs, _gofs, tgofs []*ast.File, errs error,
