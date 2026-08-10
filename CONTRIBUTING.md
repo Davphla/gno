@@ -41,6 +41,14 @@ Test specific Gno code:
 gno test ./examples/... -v
 ```
 
+## Your First Contribution
+
+Start from an issue labelled
+[good first issue](https://github.com/gnolang/gno/labels/%F0%9F%97%BA%EF%B8%8Fgood%20first%20issue%F0%9F%97%BA%EF%B8%8F)
+or [help wanted](https://github.com/gnolang/gno/labels/help%20wanted), and
+comment on it before writing code. An issue labelled WIP or META is a
+coordination thread, not a task.
+
 ## Project Structure
 
 See the [README](./README.md) for project structure overview. Most important
@@ -57,10 +65,9 @@ git log --oneline -10
 ### Submitting Pull Requests
 
 1. **Open as draft first** - Start with a draft PR to run initial checks
-2. **Read bot comments** - Our bots provide helpful guidance
-3. **Check CI results** - We have extensive CI to catch issues early
-4. **Fill out the template** - Explain what and why
-5. **Move to ready** - Once CI passes and you've self-reviewed
+2. **Check CI results** - We have extensive CI to catch issues early
+3. **Write the body** - What breaks, what the change does, which issue it closes
+4. **Move to ready** - Once CI passes and you've self-reviewed
 
 Our CI is designed to help both you and maintainers identify potential side
 effects of changes. Use it as a guide to improve your PR.
@@ -112,7 +119,19 @@ Your contribution should:
 - Update documentation if needed
 - Follow existing patterns
 
-Avoid superficial changes aimed at farming airdrops or karma.
+## What We Do Not Merge
+
+A pull request that changes text without changing behaviour is closed:
+
+- Typo, grammar and wording edits where the original was already unambiguous.
+- Formatting that `make fmt` does not produce.
+- A `.md` file restating one that already exists.
+- A stub constant or a `TODO` that closes an issue on paper.
+
+Volume earns nothing. What raises GovDAO rank is
+[Notable contribution](https://github.com/gnolang/gno/labels/%F0%9F%8F%86Notable%20contribution%F0%9F%8F%86).
+
+Fold a typo fix into the pull request that does the work.
 
 ## Communication
 
@@ -144,6 +163,9 @@ under (see above), unless the change is trivial (bug fixes, formatting,
 simple tests, docs-only). The human is responsible for reviewing the output
 for correctness, style, and security. All the same standards apply: CI must
 pass, tests must be included, conventional commits must be used.
+
+A pull request whose body advertises an autonomous agent or a bounty payout,
+and names no human owner, is closed.
 
 If using AI, point your agent at [AGENTS.md](./AGENTS.md).
 
